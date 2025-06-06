@@ -9,3 +9,6 @@ gunicorn
 matplotlib
 seaborn
 gunicorn
+Flask-Cors
+joblib
+pillow
