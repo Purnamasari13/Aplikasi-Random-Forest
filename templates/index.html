@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sistem Klasifikasi Sampah Cerdas</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        .hidden-section {
+            display: none;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+        }
+        .visible-section {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .upload-area.drag-over {
+            border-color: #007bff !important;
+            background-color: rgba(0, 123, 255, 0.05);
+        }
+        /* Penyesuaian khusus untuk footer agar tidak terlalu menempel */
+        footer {
+            margin-top: 5rem; /* Menambah jarak dari konten di atasnya */
+            position: relative;
+            z-index: 1; /* Pastikan di atas efek latar belakang */
+        }
+        /* Styling untuk placeholder drag and drop */
+        .upload-area .drag-text {
+            color: #777;
+            font-size: 1.1rem;
+            margin-top: 1rem;
+        }
+        /* Loading overlay untuk tombol klasifikasi */
+        #classifyButton.loading {
+            cursor: not-allowed;
+            background-color: #6c757d; /* Warna abu-abu saat loading */
+        }
+    </style>
+</head>
+<body>
+
+<div class="container mt-5">
+    <header class="header text-center mb-5 p-4 p-md-5">
+        <h2 class="text-uppercase">
+            <i class="bi bi-trash3 me-2"></i> Sistem Cerdas untuk Klasifikasi Gambar Sampah <i class="bi bi-trash3 ms-2"></i>
+        </h2>
+        <p class="fs-6 mt-3">Membantu Anda mengelola sampah dengan lebih baik dan mendukung keberlanjutan lingkungan. Mari bersama menjaga bumi kita!</p>
+    </header>
+
+    <main class="py-5">
+        <section id="upload-section" class="card p-4 p-md-5 mb-5 animate__animated animate__fadeInUp">
+            <h3 class="card-title text-center mb-4">
+                <i class="bi bi-cloud-arrow-up-fill me-2"></i> Unggah Gambar Sampah Anda
+            </h3>
+            <div class="upload-area border border-3 border-dashed p-4 p-md-5 text-center mb-4 rounded-4 d-flex flex-column align-items-center justify-content-center">
+                <input type="file" id="imageUpload" accept="image/*" class="d-none">
+                <label for="imageUpload" class="btn btn-primary btn-lg mb-3">
+                    <i class="bi bi-image-fill me-2"></i> Pilih Gambar
+                </label>
+                <p class="drag-text text-muted">atau seret & lepas gambar di sini</p>
+                <div id="imagePreview" class="image-preview mt-4 w-100 d-flex flex-column align-items-center justify-content-center">
+                    <img id="previewImage" src="#" alt="Pratinjau Gambar" class="img-fluid rounded-3 shadow-lg" style="max-height: 300px; display: none;">
+                    <p id="noImageText" class="text-muted mt-3 fs-5">Belum ada gambar yang diunggah.</p>
+                </div>
+            </div>
+
+            <div class="text-center">
+                <button id="classifyButton" class="btn btn-primary btn-lg px-5 mt-3" style="display: none;">
+                    <i class="bi bi-robot me-2"></i> Klasifikasikan Sampah
+                </button>
+            </div>
+        </section>
+
+        <section id="result-section" class="card p-4 p-md-5 mb-5 hidden-section animate__animated animate__fadeIn">
+            <h3 class="card-title text-center mb-4">
+                <i class="bi bi-check-circle-fill me-2"></i> Hasil Klasifikasi
+            </h3>
+            <div class="result-box text-center p-4 rounded-4 mb-4">
+                <p class="fs-5 text-muted mb-2">Jenis Sampah yang Diprediksi:</p>
+                <h4 id="predictionResult" class="display-5 fw-bold text-success mb-3 animate__animated animate__bounceIn"></h4>
+                <div class="confidence-score">
+                    <p class="fs-6 text-muted mb-1">Tingkat Keyakinan:</p>
+                    <span id="confidenceScore" class="fs-3 fw-semibold text-primary animate__animated animate__fadeIn"></span>
+                </div>
+            </div>
+            <div class="text-center mt-4">
+                <button id="resetButton" class="btn btn-outline-secondary btn-lg px-5 me-3">
+                    <i class="bi bi-arrow-clockwise me-2"></i> Klasifikasi Gambar Lain
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <footer class="text-center p-4 text-muted mt-5">
+        &copy; 2025 | Sistem Klasifikasi Sampah Cerdas untuk Lingkungan Bersih | Dibuat dengan Flask, HTML & Bootstrap
+    </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    const imageUpload = document.getElementById('imageUpload');
+    const previewImage = document.getElementById('previewImage');
+    const noImageText = document.getElementById('noImageText');
+    const classifyButton = document.getElementById('classifyButton');
+    const resultSection = document.getElementById('result-section');
+    const predictionResult = document.getElementById('predictionResult');
+    const confidenceScore = document.getElementById('confidenceScore');
+    const resetButton = document.getElementById('resetButton');
+    const uploadArea = document.querySelector('.upload-area');
+    const showGraphBtn = document.getElementById('showGraphBtn');
+    const hideGraphBtn = document.getElementById('hideGraphBtn');
+    const modelEvaluationSection = document.getElementById('model-evaluation-section');
+
+    // Handle image upload and preview
+    imageUpload.addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                previewImage.src = e.target.result;
+                previewImage.style.display = 'block';
+                noImageText.style.display = 'none';
+                classifyButton.style.display = 'block'; // Show classify button when image is loaded
+                
+                // Animate preview image
+                previewImage.classList.remove('animate__animated', 'animate__fadeIn');
+                void previewImage.offsetWidth; // Trigger reflow
+                previewImage.classList.add('animate__animated', 'animate__fadeIn');
+
+                resultSection.classList.remove('visible-section');
+                resultSection.classList.add('hidden-section'); // Hide results if re-uploading
+            }
+            reader.readAsDataURL(file);
+        } else {
+            previewImage.style.display = 'none';
+            noImageText.style.display = 'block';
+            classifyButton.style.display = 'none'; // Hide classify button if no image
+        }
+    });
+
+    // Drag and drop functionality
+    uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('drag-over'); // Add class for styling
+    });
+
+    uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('drag-over'); // Remove class
+    });
+
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('drag-over'); // Remove class
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/')) {
+            imageUpload.files = e.dataTransfer.files; // Assign dropped file to input
+            const reader = new FileReader();
+
+            reader.onload = function(event) {
+                previewImage.src = event.target.result;
+                previewImage.style.display = 'block';
+                noImageText.style.display = 'none';
+                classifyButton.style.display = 'block';
+                
+                // Animate preview image
+                previewImage.classList.remove('animate__animated', 'animate__fadeIn');
+                void previewImage.offsetWidth; // Trigger reflow
+                previewImage.classList.add('animate__animated', 'animate__fadeIn');
+
+                resultSection.classList.remove('visible-section');
+                resultSection.classList.add('hidden-section');
+            }
+            reader.readAsDataURL(file);
+        }
+    });
+
+    // Handle classification (connects to your Flask backend)
+    classifyButton.addEventListener('click', async function() {
+        if (imageUpload.files.length > 0) {
+            const file = imageUpload.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+
+            // Show "Analyzing..." status with animation
+            resultSection.classList.remove('hidden-section');
+            resultSection.classList.add('visible-section'); // Show with animation
+            predictionResult.textContent = 'Menganalisis...';
+            confidenceScore.textContent = '...';
+            classifyButton.disabled = true; // Disable button during processing
+            classifyButton.classList.add('loading'); // Add loading class for styling
+            classifyButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Memproses...'; // Add spinner
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.error) {
+                    predictionResult.textContent = `Error: ${data.error}`;
+                    confidenceScore.textContent = 'N/A';
+                    console.error("API Error:", data.error);
+                    // Use a more visually appealing alert (e.g., custom modal or Bootstrap alert)
+                    // For now, sticking with JS alert to not introduce too much new code
+                    alert(`Terjadi kesalahan pada server: ${data.error}`);
+                    resultSection.classList.remove('visible-section'); // Hide on error
+                    resultSection.classList.add('hidden-section');
+                } else {
+                    predictionResult.textContent = data.prediction;
+                    confidenceScore.textContent = `${data.confidence}%`;
+                    
+                    // Animate prediction text and confidence score
+                    predictionResult.classList.remove('animate__animated', 'animate__bounceIn');
+                    void predictionResult.offsetWidth; // Trigger reflow
+                    predictionResult.classList.add('animate__animated', 'animate__bounceIn');
+
+                    confidenceScore.classList.remove('animate__animated', 'animate__fadeIn');
+                    void confidenceScore.offsetWidth; // Trigger reflow
+                    confidenceScore.classList.add('animate__animated', 'animate__fadeIn');
+                }
+
+            } catch (error) {
+                predictionResult.textContent = 'Gagal melakukan klasifikasi.';
+                confidenceScore.textContent = 'N/A';
+                console.error("Fetch Error:", error);
+                alert("Terjadi kesalahan saat berkomunikasi dengan server. Cek konsol browser untuk detail.");
+                resultSection.classList.remove('visible-section'); // Hide on error
+                resultSection.classList.add('hidden-section');
+            } finally {
+                classifyButton.disabled = false; // Re-enable button
+                classifyButton.classList.remove('loading'); // Remove loading class
+                classifyButton.innerHTML = '<i class="bi bi-robot me-2"></i> Klasifikasikan Sampah'; // Restore button text
+            }
+        } else {
+            alert('Silakan unggah gambar terlebih dahulu!');
+        }
+    });
+
+    // Reset functionality
+    resetButton.addEventListener('click', function() {
+        imageUpload.value = ''; // Clear the input
+        previewImage.src = '#';
+        previewImage.style.display = 'none';
+        noImageText.style.display = 'block';
+        classifyButton.style.display = 'none';
+        
+        resultSection.classList.remove('visible-section');
+        resultSection.classList.add('hidden-section'); // Hide results section with animation
+
+        // Optionally hide model evaluation section if it's open
+        if (modelEvaluationSection.classList.contains('visible-section')) {
+            modelEvaluationSection.classList.remove('visible-section');
+            modelEvaluationSection.classList.add('hidden-section');
+        }
+    });
+
+    // Toggle graph section visibility
+    showGraphBtn.addEventListener('click', function() {
+        modelEvaluationSection.classList.remove('hidden-section');
+        modelEvaluationSection.classList.add('visible-section');
+        modelEvaluationSection.scrollIntoView({ behavior: 'smooth' });
+    });
+
+    hideGraphBtn.addEventListener('click', function() {
+        modelEvaluationSection.classList.remove('visible-section');
+        modelEvaluationSection.classList.add('hidden-section');
+        document.getElementById('upload-section').scrollIntoView({ behavior: 'smooth' });
+    });
+</script>
+</body>
+</html>
